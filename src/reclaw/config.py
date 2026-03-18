@@ -11,7 +11,6 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 # Known OpenClaw directory layouts
@@ -35,11 +34,11 @@ class WorkspaceLayout:
     """Resolved paths for an OpenClaw workspace."""
 
     root: Path
-    config_file: Optional[Path] = None
-    workspace_dir: Optional[Path] = None
-    sessions_dir: Optional[Path] = None
-    skills_dir: Optional[Path] = None
-    snapshots_dir: Optional[Path] = None  # ReClaw's own snapshot storage
+    config_file: Path | None = None
+    workspace_dir: Path | None = None
+    sessions_dir: Path | None = None
+    skills_dir: Path | None = None
+    snapshots_dir: Path | None = None  # ReClaw's own snapshot storage
     markdown_files: list[Path] = field(default_factory=list)
     json_files: list[Path] = field(default_factory=list)
     all_config_files: list[Path] = field(default_factory=list)
@@ -49,7 +48,7 @@ class WorkspaceLayout:
         return self.root.exists() and self.config_file is not None
 
 
-def discover_workspace(search_path: Optional[Path] = None) -> WorkspaceLayout:
+def discover_workspace(search_path: Path | None = None) -> WorkspaceLayout:
     """
     Discover an OpenClaw workspace by scanning the filesystem.
 
@@ -114,7 +113,7 @@ def _scan_directory(root: Path) -> WorkspaceLayout:
                 if agent_dir.is_dir():
                     agent_sessions = agent_dir / "sessions"
                     if agent_sessions.is_dir():
-                        layout.sessions_dir = agents_dir
+                        layout.sessions_dir = agent_sessions
                         break
 
     # Skills: check both flat and agent-based layouts
@@ -152,8 +151,8 @@ def _scan_directory(root: Path) -> WorkspaceLayout:
 
 
 def _resolve_workspace_from_config(
-    root: Path, config_file: Optional[Path]
-) -> Optional[Path]:
+    root: Path, config_file: Path | None
+) -> Path | None:
     """Try to extract the workspace path from openclaw.json."""
     if not config_file or not config_file.is_file():
         return None

@@ -16,7 +16,7 @@ import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .config import WorkspaceLayout
 
@@ -33,8 +33,8 @@ class Finding:
     severity: Severity
     file: Path
     message: str
-    detail: Optional[str] = None
-    line: Optional[int] = None
+    detail: str | None = None
+    line: int | None = None
     recoverable: bool = True
 
     def __str__(self) -> str:
@@ -452,7 +452,7 @@ def _scan_cross_references(layout: WorkspaceLayout, report: ScanReport) -> None:
 
 def _try_parse_json(
     file_path: Path, report: ScanReport, critical: bool = False
-) -> Optional[Any]:
+) -> Any | None:
     """Attempt to parse a JSON file, recording findings on failure."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -475,8 +475,9 @@ def _try_parse_json(
         return None
 
     # Detect truncated writes: file ends mid-structure
+    # Valid JSON final chars: ] } " digits e(true/false) l(null)
     stripped = content.rstrip()
-    if stripped and stripped[-1] not in "]}\"0123456789truefalsn":
+    if stripped and stripped[-1] not in "]}\"0123456789el":
         report.findings.append(Finding(
             severity=Severity.CRITICAL if critical else Severity.WARNING,
             file=file_path,
@@ -497,7 +498,7 @@ def _try_parse_json(
         return None
 
 
-def _check_binary_corruption(file_path: Path) -> Optional[str]:
+def _check_binary_corruption(file_path: Path) -> str | None:
     """Check if a text file contains null bytes or other binary indicators."""
     try:
         with open(file_path, "rb") as f:

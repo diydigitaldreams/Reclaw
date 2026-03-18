@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from .config import WorkspaceLayout
 from .scanner import ScanReport, Severity, scan_workspace
@@ -63,10 +63,10 @@ class WatchConfig:
     max_snapshots: int = 20
 
     # Alert callback (receives severity and message)
-    on_alert: Optional[Callable[[str, str], None]] = None
+    on_alert: Callable[[str, str], None] | None = None
 
     # Status callback (receives status message)
-    on_status: Optional[Callable[[str], None]] = None
+    on_status: Callable[[str], None] | None = None
 
 
 @dataclass
@@ -86,7 +86,7 @@ class WatchState:
 
 def watch_workspace(
     layout: WorkspaceLayout,
-    config: Optional[WatchConfig] = None,
+    config: WatchConfig | None = None,
 ) -> None:
     """
     Main watch loop. Blocks until interrupted (Ctrl+C / SIGTERM).

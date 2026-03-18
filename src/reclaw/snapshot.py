@@ -13,7 +13,6 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from .config import (
     WORKSPACE_MARKDOWN_FILES,
@@ -148,7 +147,7 @@ def list_snapshots(layout: WorkspaceLayout) -> list[Snapshot]:
 
 def restore_snapshot(
     layout: WorkspaceLayout,
-    snapshot_id: Optional[str] = None,
+    snapshot_id: str | None = None,
     dry_run: bool = False,
 ) -> RestoreResult:
     """
@@ -166,7 +165,7 @@ def restore_snapshot(
         )
 
     # Find the target snapshot
-    target: Optional[Snapshot] = None
+    target: Snapshot | None = None
     if snapshot_id:
         target = next(
             (s for s in snapshots if s.snapshot_id == snapshot_id), None
@@ -280,7 +279,7 @@ def _ensure_snapshots_dir(layout: WorkspaceLayout) -> Path:
     return snapshots_dir
 
 
-def _get_snapshots_dir(layout: WorkspaceLayout) -> Optional[Path]:
+def _get_snapshots_dir(layout: WorkspaceLayout) -> Path | None:
     """Return snapshots directory if it exists."""
     snapshots_dir = layout.snapshots_dir or (layout.root / ".reclaw" / "snapshots")
     if snapshots_dir.is_dir():

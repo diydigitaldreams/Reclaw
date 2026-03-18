@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .config import WorkspaceLayout
 
@@ -31,11 +31,11 @@ class SkillEntry:
 class SessionEntry:
     """A discovered session file."""
     file: Path
-    session_id: Optional[str] = None
-    model: Optional[str] = None
-    channel: Optional[str] = None
+    session_id: str | None = None
+    model: str | None = None
+    channel: str | None = None
     message_count: int = 0
-    last_modified: Optional[datetime] = None
+    last_modified: datetime | None = None
     size_bytes: int = 0
     parseable: bool = True
 
@@ -47,9 +47,9 @@ class WorkspaceIndex:
     generated_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-    config: Optional[dict[str, Any]] = None
+    config: dict[str, Any] | None = None
     config_parseable: bool = False
-    workspace_dir: Optional[Path] = None
+    workspace_dir: Path | None = None
     skills: list[SkillEntry] = field(default_factory=list)
     sessions: list[SessionEntry] = field(default_factory=list)
     identity_files: dict[str, Path] = field(default_factory=dict)
@@ -130,7 +130,7 @@ def reindex_workspace(layout: WorkspaceLayout) -> WorkspaceIndex:
 
 def _load_config(
     layout: WorkspaceLayout,
-) -> tuple[Optional[dict[str, Any]], bool]:
+) -> tuple[dict[str, Any] | None, bool]:
     """Attempt to load the main config, returning (data, success)."""
     if not layout.config_file or not layout.config_file.is_file():
         return None, False
@@ -222,7 +222,11 @@ def _discover_sessions(layout: WorkspaceLayout) -> list[SessionEntry]:
             search_dirs.append(alt)
 
     for sessions_dir in search_dirs:
-        for sf in sorted(sessions_dir.rglob("*.json")):
+        all_files = sorted(
+            list(sessions_dir.rglob("*.json"))
+            + list(sessions_dir.rglob("*.jsonl"))
+        )
+        for sf in all_files:
             stat = sf.stat()
             entry = SessionEntry(
                 file=sf,
@@ -234,17 +238,38 @@ def _discover_sessions(layout: WorkspaceLayout) -> list[SessionEntry]:
 
             try:
                 with open(sf, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                    content = f.read()
 
-                if isinstance(data, dict):
-                    entry.session_id = data.get("id") or data.get("sessionId")
-                    entry.model = data.get("model")
-                    entry.channel = data.get("channel") or data.get("platform")
+                # JSONL files: each line is a JSON object (message)
+                if sf.suffix.lower() == ".jsonl" or "\n" in content.strip():
+                    lines = content.splitlines()
+                    valid_lines = []
+                    for line in lines:
+                        stripped = line.strip()
+                        if not stripped:
+                            continue
+                        try:
+                            valid_lines.append(json.loads(stripped))
+                        except json.JSONDecodeError:
+                            pass
 
-                    # Try to count messages
-                    messages = data.get("messages") or data.get("history") or []
-                    if isinstance(messages, list):
-                        entry.message_count = len(messages)
+                    entry.message_count = len(valid_lines)
+                    # Try to extract metadata from first line
+                    if valid_lines and isinstance(valid_lines[0], dict):
+                        first = valid_lines[0]
+                        entry.session_id = first.get("id") or first.get("sessionId")
+                        entry.model = first.get("model")
+                        entry.channel = first.get("channel") or first.get("platform")
+                else:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        entry.session_id = data.get("id") or data.get("sessionId")
+                        entry.model = data.get("model")
+                        entry.channel = data.get("channel") or data.get("platform")
+
+                        messages = data.get("messages") or data.get("history") or []
+                        if isinstance(messages, list):
+                            entry.message_count = len(messages)
 
             except (json.JSONDecodeError, OSError):
                 entry.parseable = False
