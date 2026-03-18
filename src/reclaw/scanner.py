@@ -13,8 +13,6 @@ Checks for:
 from __future__ import annotations
 
 import json
-import os
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -114,8 +112,10 @@ def scan_workspace(layout: WorkspaceLayout) -> ScanReport:
             recoverable=False,
         ))
 
-    # 2. Scan all JSON files
+    # 2. Scan all JSON files (skip session files — scanned separately below)
     for json_file in layout.json_files:
+        if layout.sessions_dir and _is_under(json_file, layout.sessions_dir):
+            continue
         _scan_json_file(json_file, report)
 
     # 3. Scan markdown files
@@ -288,7 +288,6 @@ def _scan_markdown_file(file_path: Path, report: ScanReport) -> None:
         return
 
     if file_path.stat().st_size == 0:
-        name = file_path.name.upper()
         # Core identity files being empty is a warning
         from .config import WORKSPACE_MARKDOWN_FILES
         severity = (
@@ -299,8 +298,8 @@ def _scan_markdown_file(file_path: Path, report: ScanReport) -> None:
         report.findings.append(Finding(
             severity=severity,
             file=file_path,
-            message=f"Markdown file is empty",
-            detail=f"{name} has no content — agent identity/behavior may be undefined.",
+            message="Markdown file is empty",
+            detail=f"{file_path.name.upper()} has no content — agent identity/behavior may be undefined.",
         ))
         return
 
@@ -356,6 +355,17 @@ def _scan_sessions(sessions_dir: Path, report: ScanReport) -> None:
     for sf in all_files:
         report.files_scanned += 1
 
+        # Check for binary corruption first
+        corruption = _check_binary_corruption(sf)
+        if corruption:
+            report.findings.append(Finding(
+                severity=Severity.CRITICAL,
+                file=sf,
+                message="Binary corruption detected in session file",
+                detail=corruption,
+            ))
+            continue
+
         # Try standard JSON first
         findings_before = len(report.findings)
         data = _try_parse_json(sf, report, critical=False)
@@ -382,6 +392,7 @@ def _scan_sessions(sessions_dir: Path, report: ScanReport) -> None:
         if has_extra_data or sf.suffix.lower() == ".jsonl":
             del report.findings[findings_before:]
             _scan_jsonl_file(sf, report)
+
 
 def _scan_skills(
     skills_dir: Path, layout: WorkspaceLayout, report: ScanReport
@@ -508,6 +519,15 @@ def _check_binary_corruption(file_path: Path) -> Optional[str]:
         return "Unexpected BOM marker — file may have encoding issues"
 
     return None
+
+
+def _is_under(path: Path, parent: Path) -> bool:
+    """Check if path is under parent directory."""
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
 
 
 def _check_for_null_values(

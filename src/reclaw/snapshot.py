@@ -64,6 +64,7 @@ def create_snapshot(
     layout: WorkspaceLayout,
     note: str = "",
     force: bool = False,
+    max_snapshots: int = 10,
 ) -> Snapshot:
     """
     Create a snapshot of all critical workspace files.
@@ -110,8 +111,8 @@ def create_snapshot(
     with open(snapshot.manifest_path, "w", encoding="utf-8") as f:
         json.dump(snapshot.to_dict(), f, indent=2)
 
-    # Prune old snapshots (keep last 10)
-    _prune_snapshots(snapshots_root, keep=10)
+    # Prune old snapshots
+    _prune_snapshots(snapshots_root, keep=max_snapshots)
 
     return snapshot
 
@@ -201,6 +202,11 @@ def restore_snapshot(
             continue
 
         try:
+            # Safety: reject symlinks to prevent path traversal
+            if src.is_symlink():
+                result.files_skipped.append(rel_path)
+                result.errors.append(f"Skipped symlink: {rel_path}")
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
             result.files_restored.append(rel_path)
