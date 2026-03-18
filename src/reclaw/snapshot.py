@@ -16,11 +16,10 @@ from pathlib import Path
 from typing import Optional
 
 from .config import (
-    CONFIG_FILENAME,
     WORKSPACE_MARKDOWN_FILES,
     WorkspaceLayout,
 )
-from .scanner import ScanReport, Severity, scan_workspace
+from .scanner import scan_workspace
 
 
 MANIFEST_FILENAME = "manifest.json"
@@ -78,7 +77,7 @@ def create_snapshot(
     if not force:
         report = scan_workspace(layout)
         scan_clean = report.is_bootable
-        if not scan_clean and not force:
+        if not scan_clean:
             raise SnapshotError(
                 f"Workspace has {report.critical_count} critical issue(s). "
                 "Use --force to snapshot anyway, but this will save a broken state."
@@ -251,6 +250,9 @@ def _collect_critical_files(
     # Session files (they're the conversation history)
     if layout.sessions_dir and layout.sessions_dir.is_dir():
         for sf in layout.sessions_dir.rglob("*.json"):
+            rel = _rel_path(sf, layout.root)
+            files.append((sf, rel))
+        for sf in layout.sessions_dir.rglob("*.jsonl"):
             rel = _rel_path(sf, layout.root)
             files.append((sf, rel))
 

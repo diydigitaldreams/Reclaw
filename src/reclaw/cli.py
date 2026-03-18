@@ -270,12 +270,14 @@ def list_snaps(path: str | None):
 @click.option("--path", "-p", type=click.Path(exists=False), default=None)
 @click.option("--snapshot-id", "-s", default=None, help="Restore from this specific snapshot")
 @click.option("--dry-run", is_flag=True, help="Show what would be restored without writing")
-@click.confirmation_option(prompt="This will overwrite current workspace files. Continue?")
-def restore(path: str | None, snapshot_id: str | None, dry_run: bool):
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def restore(path: str | None, snapshot_id: str | None, dry_run: bool, yes: bool):
     """Restore the workspace from a known-good snapshot."""
     layout = discover_workspace(Path(path) if path else None)
     if dry_run:
         console.print("[bold]DRY RUN — no files will be modified\n[/]")
+    elif not yes:
+        click.confirm("This will overwrite current workspace files. Continue?", abort=True)
 
     result = restore_snapshot(layout, snapshot_id=snapshot_id, dry_run=dry_run)
 

@@ -18,20 +18,10 @@ from typing import Optional
 DEFAULT_OPENCLAW_DIR = Path.home() / ".openclaw"
 CONFIG_FILENAME = "openclaw.json"
 
-# Files that define a healthy OpenClaw workspace
-CORE_CONFIG_FILES = [
-    "openclaw.json",
-]
-
 WORKSPACE_MARKDOWN_FILES = [
     "AGENTS.md",
     "SOUL.md",
     "USER.md",
-]
-
-WORKSPACE_DIRS = [
-    "skills",
-    "sessions",
 ]
 
 # JSON files we expect to be parseable

@@ -344,10 +344,8 @@ def _walk_watchable(
         return
     try:
         for entry in directory.iterdir():
-            # Skip hidden, node_modules, our own snapshots
+            # Skip hidden dirs (includes .reclaw) and node_modules
             if entry.name.startswith(".") or entry.name == "node_modules":
-                continue
-            if entry.name == ".reclaw":
                 continue
             if entry.is_file():
                 results.append(entry)
