@@ -252,3 +252,64 @@ class TestSnapshot:
         layout = discover_workspace(tmp_path)
         with pytest.raises(SnapshotError):
             create_snapshot(layout, force=False)
+
+
+# === Watcher ===
+
+class TestWatcher:
+    def test_watcher_imports(self):
+        from reclaw.watcher import WatchConfig, WatchState, watch_workspace
+        assert callable(watch_workspace)
+
+    def test_watch_config_defaults(self):
+        from reclaw.watcher import WatchConfig
+        config = WatchConfig()
+        assert config.cooldown == 30
+        assert config.min_snapshot_interval == 300
+        assert config.max_snapshot_interval == 3600
+        assert config.poll_interval == 10
+        assert config.use_events is True
+        assert config.scan_on_start is True
+        assert config.snapshot_on_start is True
+
+    def test_build_hash_map(self, mock_layout):
+        from reclaw.watcher import _build_hash_map
+        hashes = _build_hash_map(mock_layout)
+        assert len(hashes) > 0
+        assert "openclaw.json" in hashes
+
+    def test_hash_map_detects_changes(self, mock_layout, mock_workspace):
+        from reclaw.watcher import _build_hash_map, _diff_hashes
+        before = _build_hash_map(mock_layout)
+
+        # Modify a file
+        soul = mock_workspace / "workspace" / "SOUL.md"
+        soul.write_text("# Soul\nUpdated content.")
+
+        after = _build_hash_map(mock_layout)
+        changed = _diff_hashes(before, after)
+        assert "SOUL.md" in changed
+
+    def test_hash_map_ignores_reclaw_dir(self, mock_layout):
+        from reclaw.watcher import _build_hash_map
+        # Create a snapshot first (creates .reclaw/ dir)
+        create_snapshot(mock_layout, note="test")
+        hashes = _build_hash_map(mock_layout)
+        reclaw_files = [k for k in hashes if ".reclaw" in k]
+        assert len(reclaw_files) == 0
+
+    def test_alert_callback_fires(self):
+        from reclaw.watcher import WatchConfig, WatchState, _emit_alert
+        alerts = []
+        config = WatchConfig(on_alert=lambda sev, msg: alerts.append((sev, msg)))
+        state = WatchState()
+        _emit_alert(config, state, "critical", "test alert")
+        assert len(alerts) == 1
+        assert alerts[0] == ("critical", "test alert")
+        assert state.alerts_fired == 1
+
+    def test_cli_watch_command_exists(self):
+        from reclaw.cli import main
+        # Verify 'watch' is a registered command
+        assert "watch" in main.commands
+

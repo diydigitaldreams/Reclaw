@@ -16,6 +16,9 @@ ReClaw operates **out-of-band** — it's a standalone Python tool with zero depe
 pip install -e .
 # or when published:
 # pip install reclaw
+
+# For real-time file monitoring (recommended):
+pip install -e ".[watch]"
 ```
 
 ## Commands
@@ -29,13 +32,16 @@ reclaw status --path /path/to/.openclaw
 ```
 
 ### `reclaw scan`
-Deep surgical scan of every JSON, Markdown, and config file. Checks for:
+Deep surgical scan of every JSON, JSONL, Markdown, and config file. Checks for:
 - JSON parse errors and truncated writes
+- JSONL (JSON Lines) validation — including `.json` session files written in JSONL format
 - Null bytes / binary corruption in text files
 - Empty identity files (AGENTS.md, SOUL.md, USER.md)
 - Orphaned references between config and filesystem
 - Oversized session files
 - Broken workspace path references
+
+Understands both flat (`sessions/`) and agent-based (`agents/*/sessions/`) OpenClaw layouts.
 
 ```bash
 reclaw scan
@@ -75,13 +81,28 @@ reclaw restore                    # restore from latest clean snapshot
 reclaw restore --snapshot-id 20260318_142530   # restore specific snapshot
 ```
 
+### `reclaw watch`
+Background monitor that auto-snapshots when the workspace is healthy. Detects file changes, waits for them to settle, scans for corruption, and creates a recovery checkpoint if everything is clean. Alerts immediately if critical issues are detected.
+
+```bash
+reclaw watch                          # start with defaults
+reclaw watch --cooldown 60            # wait 60s after last change before scanning
+reclaw watch --interval 600           # minimum 10 min between snapshots
+reclaw watch --max-interval 1800      # force a check every 30 min
+reclaw watch --no-events              # force polling mode (no watchdog)
+```
+
+With `watchdog` installed (`pip install reclaw[watch]`), it uses real-time filesystem events. Without it, falls back to polling every 10 seconds — still works, just slightly less responsive.
+
 ## How It Works
 
-**Scanner** — Walks the workspace and validates every file. JSON files are parse-tested. Text files are checked for binary corruption. Config files are validated against known schema patterns. Cross-references between config and filesystem are verified.
+**Scanner** — Walks the workspace and validates every file. JSON files are parse-tested. JSONL files (including `.json` session files written in JSON Lines format) are validated line-by-line. Text files are checked for binary corruption. Config files are validated against known schema patterns. Cross-references between config and filesystem are verified.
 
 **Re-indexer** — Rebuilds the complete structural map from scratch. Discovers sessions, skills, identity files, and config without trusting any existing index. Produces a manifest that shows exactly what's on disk.
 
-**Snapshot Engine** — Maintains timestamped backups of all critical files in `~/.openclaw/.reclaw/snapshots/`. Automatically prunes to the last 10 snapshots. Restore copies files back into place from the backup.
+**Snapshot Engine** — Maintains timestamped backups of all critical files in `~/.openclaw/.reclaw/snapshots/`. Automatically prunes old snapshots. Restore copies files back into place from the backup.
+
+**Watcher** — Background daemon that monitors the workspace for changes. After changes settle (configurable cooldown), runs a health scan and auto-snapshots if clean. Uses watchdog for real-time filesystem events when available, falls back to polling otherwise.
 
 ## Project Structure
 
@@ -91,7 +112,8 @@ src/reclaw/
 ├── config.py       # Workspace discovery and path resolution
 ├── scanner.py      # File validation and corruption detection
 ├── reindexer.py    # Filesystem-based structural mapping
-└── snapshot.py     # Checkpoint creation and restore
+├── snapshot.py     # Checkpoint creation and restore
+└── watcher.py      # Background filesystem monitor
 ```
 
 ## Development

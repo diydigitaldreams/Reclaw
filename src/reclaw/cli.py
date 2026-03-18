@@ -36,6 +36,7 @@ from .snapshot import (
     list_snapshots,
     restore_snapshot,
 )
+from .watcher import WatchConfig, watch_workspace
 
 
 # --- Output helpers that degrade gracefully without rich ---
@@ -338,6 +339,68 @@ def status(path: str | None):
         console.print(f"  Total:  {len(snaps)} snapshot(s)")
     else:
         console.print("  [yellow]None — run 'reclaw snapshot' to create a recovery point[/]")
+
+
+@main.command()
+@click.option("--path", "-p", type=click.Path(exists=False), default=None,
+              help="Path to OpenClaw workspace (default: auto-discover)")
+@click.option("--cooldown", "-c", default=30, show_default=True,
+              help="Seconds to wait after last change before scanning")
+@click.option("--interval", "-i", default=300, show_default=True,
+              help="Minimum seconds between snapshots")
+@click.option("--max-interval", default=3600, show_default=True,
+              help="Maximum seconds between snapshots (even without changes)")
+@click.option("--poll", default=10, show_default=True,
+              help="Polling interval in seconds (when watchdog is not installed)")
+@click.option("--no-events", is_flag=True,
+              help="Force polling mode even if watchdog is available")
+@click.option("--max-snapshots", default=20, show_default=True,
+              help="Maximum number of snapshots to keep")
+def watch(
+    path: str | None,
+    cooldown: int,
+    interval: int,
+    max_interval: int,
+    poll: int,
+    no_events: bool,
+    max_snapshots: int,
+):
+    """Watch the workspace and auto-snapshot when healthy.
+
+    Monitors for file changes, waits for them to settle, scans for
+    corruption, and creates a recovery snapshot if everything is clean.
+    Alerts immediately if critical issues are detected.
+
+    \b
+    Install watchdog for real-time event monitoring:
+        pip install watchdog
+    Without it, ReClaw falls back to polling.
+    """
+    layout = discover_workspace(Path(path) if path else None)
+
+    if not layout.is_valid:
+        console.print(f"[bold red]✗[/] No valid workspace at {layout.root}")
+        raise SystemExit(1)
+
+    def _rich_status(msg: str) -> None:
+        console.print(msg)
+
+    def _rich_alert(severity: str, msg: str) -> None:
+        style = "bold red" if severity == "critical" else "yellow"
+        console.print(f"\n[{style}]⚠️  ALERT [{severity.upper()}][/]: {msg}\n")
+
+    watch_config = WatchConfig(
+        cooldown=cooldown,
+        min_snapshot_interval=interval,
+        max_snapshot_interval=max_interval,
+        poll_interval=poll,
+        use_events=not no_events,
+        max_snapshots=max_snapshots,
+        on_status=_rich_status,
+        on_alert=_rich_alert,
+    )
+
+    watch_workspace(layout, watch_config)
 
 
 def _short_path(file_path: Path, root: Path) -> str:
