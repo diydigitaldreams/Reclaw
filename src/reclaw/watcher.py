@@ -12,16 +12,14 @@ Two modes:
 
 from __future__ import annotations
 
-import hashlib
 import signal
-import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from .config import WorkspaceLayout, discover_workspace
+from .config import WorkspaceLayout
 from .scanner import ScanReport, Severity, scan_workspace
 from .snapshot import SnapshotError, create_snapshot, list_snapshots
 
@@ -274,15 +272,13 @@ def _try_snapshot(
 ) -> bool:
     """Attempt to create a snapshot. Returns True on success."""
     try:
-        snap = create_snapshot(layout, note=f"watch: {note}", force=False)
+        snap = create_snapshot(
+            layout, note=f"watch: {note}", force=False,
+            max_snapshots=config.max_snapshots,
+        )
         state.last_snapshot_time = time.time()
         state.snapshots_created += 1
         _emit_status(config, f"    ✓ Snapshot {snap.snapshot_id} ({len(snap.files)} files)")
-
-        # Prune if we have too many
-        snaps = list_snapshots(layout)
-        if len(snaps) > config.max_snapshots:
-            _emit_status(config, f"    Pruning to {config.max_snapshots} snapshots")
 
         return True
     except SnapshotError as e:
@@ -348,10 +344,8 @@ def _walk_watchable(
         return
     try:
         for entry in directory.iterdir():
-            # Skip hidden, node_modules, our own snapshots
+            # Skip hidden dirs (includes .reclaw) and node_modules
             if entry.name.startswith(".") or entry.name == "node_modules":
-                continue
-            if entry.name == ".reclaw":
                 continue
             if entry.is_file():
                 results.append(entry)
@@ -384,4 +378,4 @@ def _emit_alert(
 
 
 def _now_str() -> str:
-    return datetime.now().strftime("%H:%M:%S")
+    return datetime.now(timezone.utc).strftime("%H:%M:%S")

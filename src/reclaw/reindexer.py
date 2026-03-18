@@ -223,11 +223,12 @@ def _discover_sessions(layout: WorkspaceLayout) -> list[SessionEntry]:
 
     for sessions_dir in search_dirs:
         for sf in sorted(sessions_dir.rglob("*.json")):
+            stat = sf.stat()
             entry = SessionEntry(
                 file=sf,
-                size_bytes=sf.stat().st_size,
+                size_bytes=stat.st_size,
                 last_modified=datetime.fromtimestamp(
-                    sf.stat().st_mtime, tz=timezone.utc
+                    stat.st_mtime, tz=timezone.utc
                 ),
             )
 

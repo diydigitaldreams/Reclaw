@@ -16,11 +16,10 @@ from pathlib import Path
 from typing import Optional
 
 from .config import (
-    CONFIG_FILENAME,
     WORKSPACE_MARKDOWN_FILES,
     WorkspaceLayout,
 )
-from .scanner import ScanReport, Severity, scan_workspace
+from .scanner import scan_workspace
 
 
 MANIFEST_FILENAME = "manifest.json"
@@ -64,6 +63,7 @@ def create_snapshot(
     layout: WorkspaceLayout,
     note: str = "",
     force: bool = False,
+    max_snapshots: int = 10,
 ) -> Snapshot:
     """
     Create a snapshot of all critical workspace files.
@@ -77,7 +77,7 @@ def create_snapshot(
     if not force:
         report = scan_workspace(layout)
         scan_clean = report.is_bootable
-        if not scan_clean and not force:
+        if not scan_clean:
             raise SnapshotError(
                 f"Workspace has {report.critical_count} critical issue(s). "
                 "Use --force to snapshot anyway, but this will save a broken state."
@@ -110,8 +110,8 @@ def create_snapshot(
     with open(snapshot.manifest_path, "w", encoding="utf-8") as f:
         json.dump(snapshot.to_dict(), f, indent=2)
 
-    # Prune old snapshots (keep last 10)
-    _prune_snapshots(snapshots_root, keep=10)
+    # Prune old snapshots
+    _prune_snapshots(snapshots_root, keep=max_snapshots)
 
     return snapshot
 
@@ -201,6 +201,11 @@ def restore_snapshot(
             continue
 
         try:
+            # Safety: reject symlinks to prevent path traversal
+            if src.is_symlink():
+                result.files_skipped.append(rel_path)
+                result.errors.append(f"Skipped symlink: {rel_path}")
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
             result.files_restored.append(rel_path)
@@ -245,6 +250,9 @@ def _collect_critical_files(
     # Session files (they're the conversation history)
     if layout.sessions_dir and layout.sessions_dir.is_dir():
         for sf in layout.sessions_dir.rglob("*.json"):
+            rel = _rel_path(sf, layout.root)
+            files.append((sf, rel))
+        for sf in layout.sessions_dir.rglob("*.jsonl"):
             rel = _rel_path(sf, layout.root)
             files.append((sf, rel))
 
