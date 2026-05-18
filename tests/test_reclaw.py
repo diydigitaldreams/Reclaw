@@ -1,6 +1,7 @@
 """Tests for the ReClaw recovery engine."""
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -313,3 +314,15 @@ class TestWatcher:
         # Verify 'watch' is a registered command
         assert "watch" in main.commands
 
+    def test_no_immediate_periodic_scan_on_startup(self, mock_layout):
+        from reclaw.watcher import WatchConfig, WatchState, _maybe_scan_and_snapshot
+
+        config = WatchConfig(
+            max_snapshot_interval=3600,
+            cooldown=30,
+        )
+        state = WatchState(last_snapshot_time=time.time())
+
+        before_scans = state.scans_run
+        _maybe_scan_and_snapshot(mock_layout, config, state)
+        assert state.scans_run == before_scans

@@ -132,6 +132,11 @@ def watch_workspace(
     # Build initial file hash map for polling
     state.file_hashes = _build_hash_map(layout)
 
+    # Start periodic snapshot timing from watcher startup so we don't
+    # immediately run a forced periodic scan/snapshot on the first loop.
+    if state.last_snapshot_time == 0.0:
+        state.last_snapshot_time = time.time()
+
     _emit_status(config, "\nWatching for changes... (Ctrl+C to stop)\n")
 
     # Choose watch strategy
